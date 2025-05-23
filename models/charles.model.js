@@ -18,7 +18,7 @@ class Charles {
                 .query(`
                     INSERT INTO charles (username, email, password)
                     VALUES (@username, @email, @password);
-                    SELECT SCOPE_IDENTITY() AS id;
+                    SELECT CAST(SCOPE_IDENTITY() AS INT) AS id;
                 `);
             return result.recordset[0];
         } catch (err) {
@@ -45,9 +45,12 @@ class Charles {
                 throw new Error('Invalid password');
             }
 
-            // Remove password from user object
-            const { password: _, ...userWithoutPassword } = user;
-            return userWithoutPassword;
+            // Remove password from user object and ensure id is a number
+            return {
+                id: parseInt(user.id),
+                username: user.username,
+                email: user.email
+            };
         } catch (err) {
             throw err;
         }
@@ -57,8 +60,11 @@ class Charles {
         try {
             const pool = await sql.connect(dbConfig);
             const result = await pool.request()
-                .query('SELECT id, username, email, password FROM charles');
-            return result.recordset;
+                .query('SELECT id, username, email FROM charles');
+            return result.recordset.map(user => ({
+                ...user,
+                id: parseInt(user.id)
+            }));
         } catch (err) {
             throw err;
         }
@@ -66,11 +72,24 @@ class Charles {
 
     static async findById(id) {
         try {
+            if (!id || isNaN(parseInt(id))) {
+                throw new Error('Invalid ID parameter');
+            }
+
             const pool = await sql.connect(dbConfig);
             const result = await pool.request()
-                .input('id', sql.Int, id)
+                .input('id', sql.Int, parseInt(id))
                 .query('SELECT id, username, email FROM charles WHERE id = @id');
-            return result.recordset[0];
+            
+            const user = result.recordset[0];
+            if (!user) {
+                throw new Error('User not found');
+            }
+
+            return {
+                ...user,
+                id: parseInt(user.id)
+            };
         } catch (err) {
             throw err;
         }
@@ -78,6 +97,10 @@ class Charles {
 
     static async update(id, userData) {
         try {
+            if (!id || isNaN(parseInt(id))) {
+                throw new Error('Invalid ID parameter');
+            }
+
             const pool = await sql.connect(dbConfig);
             let query = 'UPDATE charles SET ';
             const inputs = [];
@@ -99,14 +122,23 @@ class Charles {
             query += ' SELECT id, username, email FROM charles WHERE id = @id;';
 
             const request = pool.request()
-                .input('id', sql.Int, id);
+                .input('id', sql.Int, parseInt(id));
 
             if (userData.username) request.input('username', sql.NVarChar(50), userData.username);
             if (userData.email) request.input('email', sql.NVarChar(100), userData.email);
             if (userData.password) request.input('password', sql.NVarChar(100), userData.password);
 
             const result = await request.query(query);
-            return result.recordset[0];
+            const updatedUser = result.recordset[0];
+            
+            if (!updatedUser) {
+                throw new Error('User not found');
+            }
+
+            return {
+                ...updatedUser,
+                id: parseInt(updatedUser.id)
+            };
         } catch (err) {
             throw err;
         }
@@ -114,10 +146,19 @@ class Charles {
 
     static async delete(id) {
         try {
+            if (!id || isNaN(parseInt(id))) {
+                throw new Error('Invalid ID parameter');
+            }
+
             const pool = await sql.connect(dbConfig);
-            await pool.request()
-                .input('id', sql.Int, id)
+            const result = await pool.request()
+                .input('id', sql.Int, parseInt(id))
                 .query('DELETE FROM charles WHERE id = @id');
+            
+            if (result.rowsAffected[0] === 0) {
+                throw new Error('User not found');
+            }
+            
             return true;
         } catch (err) {
             throw err;

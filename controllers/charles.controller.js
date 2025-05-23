@@ -1,4 +1,5 @@
 const Charles = require('../models/charles.model');
+const jwt = require('jsonwebtoken');
 
 // Register a new user
 exports.register = async (req, res) => {
@@ -45,9 +46,17 @@ exports.login = async (req, res) => {
         // Login user
         const user = await Charles.login(email, password);
 
+        // Generate JWT token
+        const token = jwt.sign(
+            { id: user.id, email: user.email },
+            process.env.JWT_SECRET || 'your-secret-key',
+            { expiresIn: '24h' }
+        );
+
         res.json({
             message: "Login successful!",
-            data: user
+            data: user,
+            token: token
         });
     } catch (err) {
         res.status(401).json({
@@ -73,15 +82,18 @@ exports.findOne = async (req, res) => {
     try {
         const id = req.params.id;
         const user = await Charles.findById(id);
-        
-        if (!user) {
-            return res.status(404).json({
-                message: `User with id ${id} not found.`
-            });
-        }
-
         res.json(user);
     } catch (err) {
+        if (err.message === 'Invalid ID parameter') {
+            return res.status(400).json({
+                message: err.message
+            });
+        }
+        if (err.message === 'User not found') {
+            return res.status(404).json({
+                message: err.message
+            });
+        }
         res.status(500).json({
             message: err.message || `Error retrieving user with id ${req.params.id}`
         });
@@ -94,13 +106,6 @@ exports.update = async (req, res) => {
         const id = req.params.id;
         const { username, email, password } = req.body;
 
-        const user = await Charles.findById(id);
-        if (!user) {
-            return res.status(404).json({
-                message: `User with id ${id} not found.`
-            });
-        }
-
         const updatedUser = await Charles.update(id, {
             username,
             email,
@@ -112,6 +117,16 @@ exports.update = async (req, res) => {
             data: updatedUser
         });
     } catch (err) {
+        if (err.message === 'Invalid ID parameter') {
+            return res.status(400).json({
+                message: err.message
+            });
+        }
+        if (err.message === 'User not found') {
+            return res.status(404).json({
+                message: err.message
+            });
+        }
         res.status(500).json({
             message: err.message || `Error updating user with id ${req.params.id}`
         });
@@ -122,19 +137,21 @@ exports.update = async (req, res) => {
 exports.delete = async (req, res) => {
     try {
         const id = req.params.id;
-        const user = await Charles.findById(id);
-        
-        if (!user) {
-            return res.status(404).json({
-                message: `User with id ${id} not found.`
-            });
-        }
-
         await Charles.delete(id);
         res.json({
             message: "User was deleted successfully!"
         });
     } catch (err) {
+        if (err.message === 'Invalid ID parameter') {
+            return res.status(400).json({
+                message: err.message
+            });
+        }
+        if (err.message === 'User not found') {
+            return res.status(404).json({
+                message: err.message
+            });
+        }
         res.status(500).json({
             message: err.message || `Error deleting user with id ${req.params.id}`
         });
