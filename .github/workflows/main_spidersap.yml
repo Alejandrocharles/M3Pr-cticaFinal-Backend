@@ -2,7 +2,7 @@
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 # Updated to use publish profile authentication
 
-name: Build and deploy Node.js app to Azure Web App - spidersap
+name: Build and deploy Node.js backend to Azure Web App
 
 on:
   push:
@@ -21,14 +21,21 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "18.x"
+          cache: "npm"
 
-      - name: npm install and build
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create .env file
         run: |
-          npm install
-          npm run build --if-present
+          echo "DB_HOST=${{ secrets.DB_HOST }}" >> .env
+          echo "DB_USER=${{ secrets.DB_USER }}" >> .env
+          echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
+          echo "DB_NAME=${{ secrets.DB_NAME }}" >> .env
+          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> .env
+          echo "PORT=${{ secrets.PORT }}" >> .env
 
-      - name: "Deploy to Azure Web App"
-        id: deploy-to-webapp
+      - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v2
         with:
           app-name: "spidersap"
